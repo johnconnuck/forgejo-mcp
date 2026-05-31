@@ -20,7 +20,7 @@ We will transition the service architecture to support distributed scaling and r
 ### 2. Request-Scoped Observability (Factor XI: Logs)
 - Introduce structured span logging (JSON to stdout).
 - Pass `TraceID` via `context.Context` from the transport layer down to the Forgejo SDK calls.
-- **Adaptive Trace ID Propagation:** The service will adopt IDs from upstream headers (e.g., `X-Request-ID`) when present, but automatically generate unique internal IDs to ensure observability for "Black Box" clients.
+- **Adaptive Trace ID Propagation:** Support IDs from upstream headers (e.g., `X-Request-ID`) or generate unique internal IDs.
 
 #### Request ID Flow Diagram:
 ```text
@@ -51,17 +51,24 @@ We will transition the service architecture to support distributed scaling and r
            (Backing Service Logs)
 ```
 
-### 3. Edge-Awareness (XFF Support)
-- Support `X-Forwarded-For` and `X-Real-IP` headers to ensure accurate audit logs and enable downstream rate limiting.
+### 3. Edge-Awareness & Multi-Layer Auth
+The service supports two primary authentication and deployment postures:
+
+#### A. Direct Access (Single-Layer)
+- Standard PAT-based authentication where the client communicates directly with the MCP server.
+
+#### B. Shielded Gateway (Internal Multi-Layer Auth)
+- **Layer 1 (Identity):** `forgejo-mcp` optionally validates an OAuth2/OIDC Bearer token at the entry point to enforce organizational access policies.
+- **Layer 2 (Authorization):** The server utilizes the user-provided Forgejo PAT (passed via header or payload) to authorize specific API operations.
+- **XFF Support:** Proper handling of `X-Forwarded-For` for audit logs when behind network edges.
 
 ### 4. Configuration Evolution (Factor III: Config)
 - Ensure all scaling parameters and quotas are overridable via environment variables.
-- Prepare for a structured configuration model for complex multi-tenant environments.
 
 ### 5. Statelessness & Disposability (Factors VI & IX)
-- Maintain strict statelessness; all authentication and tracing state is request-bound.
+- Maintain strict statelessness; all identity and tracing state is request-bound.
 - Ensure graceful shutdown to drain connection pools and active requests.
 
 ## Consequences
-- **Pros:** Dramatically improved throughput for concurrent users; better debuggability in production; protection against upstream service exhaustion.
-- **Cons:** Increased internal complexity regarding context management; full cross-service correlation depends on upstream participation, though internal tracing remains guaranteed.
+- **Pros:** Dramatically improved throughput; better debuggability; "Defense in Depth" for multi-user instances.
+- **Cons:** Increased complexity in the authentication middleware; requires client-side coordination for the two-layer credential passing.
