@@ -62,7 +62,15 @@ The service supports two primary authentication and deployment postures:
 - **Layer 2 (Authorization):** The server utilizes the user-provided Forgejo PAT (passed via header or payload) to authorize specific API operations.
 - **XFF Support:** Proper handling of `X-Forwarded-For` for audit logs when behind network edges.
 
-### 4. Configuration Evolution (Factor III: Config)
+### 4. Instance Governance & SSRF Protection
+The service will implement a pluggable Target Policy to support different deployment needs:
+
+- **Pinned Policy (Default):** Hard-locked to the startup `FORGEJO_URL`. Attempts to target other hosts are rejected.
+- **Whitelisted Policy:** Allows dynamic targets matching a provided list of trusted domains (Enterprise/Federated mode).
+- **Discovery Policy (Public Gateway):** Allows the client to specify an arbitrary `X-Forgejo-URL`. 
+  - *Security Note:* In Discovery mode, the service must implement strict egress filtering (e.g., blocking internal/link-local IP ranges) to prevent its use as an SSRF relay.
+
+### 5. Configuration Evolution (Factor III: Config)
 - Ensure all scaling parameters and quotas are overridable via environment variables.
 
 ### 5. Statelessness & Disposability (Factors VI & IX)
