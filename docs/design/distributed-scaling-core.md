@@ -22,6 +22,35 @@ We will transition the service architecture to support distributed scaling and r
 - Pass `TraceID` via `context.Context` from the transport layer down to the Forgejo SDK calls.
 - **Adaptive Trace ID Propagation:** The service will adopt IDs from upstream headers (e.g., `X-Request-ID`) when present, but automatically generate unique internal IDs to ensure observability for "Black Box" clients.
 
+#### Request ID Flow Diagram:
+```text
+       [ CLIENT A ]          [ CLIENT B ]
+     (Black Box MCP)       (Managed Proxy)
+            |                     |
+     [ NO TRACE ID ]       [ X-REQUEST-ID ]
+            |                     |
+            v                     v
+    +---------------------------------------+
+    |           FORGEJO-MCP SERVER          |
+    |                                       |
+    | 1. Detect ID? (No) -> Generate UUID   |
+    |    Detect ID? (Yes)-> Adopt X-Req-ID  |
+    |                                       |
+    | 2. Bind ID to Context (TraceContext)  |
+    |                                       |
+    | 3. Structured Event Logging:          |
+    |    [ID] Tool Execution Start          |
+    |    [ID] Connection Pool Checkout      |
+    +-------------------|-------------------+
+                        |
+            [ X-CORRELATION-ID ]
+            (Propagated Header)
+                        |
+                        v
+               [ FORGEJO API ]
+           (Backing Service Logs)
+```
+
 ### 3. Edge-Awareness (XFF Support)
 - Support `X-Forwarded-For` and `X-Real-IP` headers to ensure accurate audit logs and enable downstream rate limiting.
 
