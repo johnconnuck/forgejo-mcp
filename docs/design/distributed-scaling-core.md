@@ -17,10 +17,10 @@ We will transition the service architecture to support distributed scaling and r
 - Expose `MaxIdleConnsPerHost` and `MaxConnsPerHost` as configurable parameters.
 - Default to sane "production-grade" values (e.g., 100/10) to eliminate handshake storms.
 
-### 2. Request-Scoped Observability (Factor XI: Logs)
-- Introduce structured span logging (JSON to stdout).
-- Pass `TraceID` via `context.Context` from the transport layer down to the Forgejo SDK calls.
-- **Adaptive Trace ID Propagation:** Support IDs from upstream headers (e.g., `X-Request-ID`) or generate unique internal IDs.
+### 2. Request-Scoped Observability & Telemetry (Factor XI: Logs)
+- **Structured Span Logging:** JSON-formatted event streams to stdout/stderr.
+- **Adaptive Trace ID Propagation:** Support IDs from upstream headers (e.g., `X-Request-ID`) or generate unique internal IDs to enable cross-service correlation.
+- **Saturation Telemetry:** Emit sanitized resource-state events (e.g., connection pool utilization, goroutine pressure) to allow external monitoring tools (Vector, Prometheus) to trigger proactive horizontal scaling.
 
 #### Request ID Flow Diagram:
 ```text
@@ -40,7 +40,7 @@ We will transition the service architecture to support distributed scaling and r
     |                                       |
     | 3. Structured Event Logging:          |
     |    [ID] Tool Execution Start          |
-    |    [ID] Connection Pool Checkout      |
+    |    [ID] Saturation: Pool 8/10         |
     +-------------------|-------------------+
                         |
             [ X-CORRELATION-ID ]
@@ -53,32 +53,25 @@ We will transition the service architecture to support distributed scaling and r
 
 ### 3. Edge-Awareness & Multi-Layer Auth
 The service supports two primary authentication and deployment postures:
-
-#### A. Direct Access (Single-Layer)
-- Standard PAT-based authentication where the client communicates directly with the MCP server.
-
-#### B. Shielded Gateway (Internal Multi-Layer Auth)
-- **Layer 1 (Identity):** `forgejo-mcp` optionally validates an OAuth2/OIDC Bearer token at the entry point to enforce organizational access policies.
-- **Layer 2 (Authorization):** The server utilizes the user-provided Forgejo PAT (passed via header or payload) to authorize specific API operations.
-- **XFF Support:** Proper handling of `X-Forwarded-For` for audit logs when behind network edges.
+- **Direct Access (Single-Layer):** Standard PAT-based authentication.
+- **Shielded Gateway (Internal Multi-Layer Auth):** Optional OAuth2/OIDC Bearer token validation at the entry point (Identity), combined with user-provided Forgejo PATs for API execution (Authorization).
+- **XFF Support:** Proper handling of `X-Forwarded-For` for audit logs and edge-based rate limiting.
 
 ### 4. Instance Governance & SSRF Protection
-The service will implement a pluggable Target Policy to support different deployment needs:
-- **Pinned Policy (Default):** Hard-locked to the startup `FORGEJO_URL`. Attempts to target other hosts are rejected.
-- **Whitelisted Policy:** Allows dynamic targets matching a provided list of trusted domains (Enterprise/Federated mode).
-- **Discovery Policy (Public Gateway):** Allows the client to specify an arbitrary `X-Forgejo-URL`. 
-  - *Security Note:* In Discovery mode, the service must implement strict egress filtering (e.g., blocking internal/link-local IP ranges) to prevent its use as an SSRF relay.
+The service will implement a pluggable Target Policy:
+- **Pinned Policy (Default):** Hard-locked to the startup `FORGEJO_URL`.
+- **Whitelisted Policy:** Allows dynamic targets matching trusted domains.
+- **Discovery Policy (Public Gateway):** Allows arbitrary `X-Forgejo-URL` with strict egress filtering (blocking internal/link-local IP ranges).
 
 ### 5. Resource-Aware Health Monitoring (Factor IX: Disposability)
-The service will implement distinct health endpoints for orchestrator integration:
-- **Liveness (`/healthz`):** A lightweight heartbeat to ensure the process is responsive.
-- **Readiness (`/readyz`):** Reports readiness based on internal resource saturation (Connection Pool and Goroutine limits). It explicitly avoids failing due to upstream Forgejo issues to prevent cascading service outages.
-- **Graceful Drain:** Upon `SIGTERM`, the service will immediately signal unreadiness to the load balancer via `/readyz` while completing in-flight tool calls.
+- **Liveness (`/healthz`):** Lightweight process heartbeat.
+- **Readiness (`/readyz`):** Reports readiness based on internal saturation limits. Signals `503` when hard limits are reached to trigger reactive orchestrator scaling.
+- **Graceful Drain:** Upon `SIGTERM`, immediately signal unreadiness while completing in-flight requests.
 
 ### 6. Configuration Evolution (Factor III: Config) & Statelessness
-- Ensure all scaling parameters and quotas are overridable via environment variables.
+- All scaling parameters, quotas, and auth providers are overridable via environment variables.
 - Maintain strict statelessness (Factor VI); all identity and tracing state is request-bound.
 
 ## Consequences
-- **Pros:** Dramatically improved throughput; better debuggability; "Defense in Depth" for multi-user instances.
-- **Cons:** Increased complexity in the authentication middleware; requires client-side coordination for the two-layer credential passing.
+- **Pros:** Dramatically improved throughput; proactive/reactive scaling support; "Defense in Depth" for multi-user instances.
+- **Cons:** Increased complexity in the transport and middleware layers; requires 12-factor infrastructure for full observability benefits.
