@@ -1,7 +1,7 @@
 # ADR: Scaling Forgejo-MCP for Distributed Multi-User Environments
 
 ## Status
-WIP (Work In Progress) - Early State Workbench
+Proposed
 
 ## Context
 Forgejo-MCP was initially designed as a lean, singleton-based MCP server. As we move toward a multi-user remote instance model (via SSE/HTTP), the current architecture faces several bottlenecks:
