@@ -64,18 +64,20 @@ The service supports two primary authentication and deployment postures:
 
 ### 4. Instance Governance & SSRF Protection
 The service will implement a pluggable Target Policy to support different deployment needs:
-
 - **Pinned Policy (Default):** Hard-locked to the startup `FORGEJO_URL`. Attempts to target other hosts are rejected.
 - **Whitelisted Policy:** Allows dynamic targets matching a provided list of trusted domains (Enterprise/Federated mode).
 - **Discovery Policy (Public Gateway):** Allows the client to specify an arbitrary `X-Forgejo-URL`. 
   - *Security Note:* In Discovery mode, the service must implement strict egress filtering (e.g., blocking internal/link-local IP ranges) to prevent its use as an SSRF relay.
 
-### 5. Configuration Evolution (Factor III: Config)
-- Ensure all scaling parameters and quotas are overridable via environment variables.
+### 5. Resource-Aware Health Monitoring (Factor IX: Disposability)
+The service will implement distinct health endpoints for orchestrator integration:
+- **Liveness (`/healthz`):** A lightweight heartbeat to ensure the process is responsive.
+- **Readiness (`/readyz`):** Reports readiness based on internal resource saturation (Connection Pool and Goroutine limits). It explicitly avoids failing due to upstream Forgejo issues to prevent cascading service outages.
+- **Graceful Drain:** Upon `SIGTERM`, the service will immediately signal unreadiness to the load balancer via `/readyz` while completing in-flight tool calls.
 
-### 5. Statelessness & Disposability (Factors VI & IX)
-- Maintain strict statelessness; all identity and tracing state is request-bound.
-- Ensure graceful shutdown to drain connection pools and active requests.
+### 6. Configuration Evolution (Factor III: Config) & Statelessness
+- Ensure all scaling parameters and quotas are overridable via environment variables.
+- Maintain strict statelessness (Factor VI); all identity and tracing state is request-bound.
 
 ## Consequences
 - **Pros:** Dramatically improved throughput; better debuggability; "Defense in Depth" for multi-user instances.
