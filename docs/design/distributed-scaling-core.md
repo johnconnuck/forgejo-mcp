@@ -69,7 +69,7 @@ The service will implement a pluggable Target Policy:
 - **Graceful Drain:** Upon `SIGTERM`, immediately signal unreadiness while completing in-flight requests.
 
 ### 6. Configuration Evolution (Factor III: Config) & Statelessness
-- All scaling parameters, quotas, and auth providers are overridable via environment variables.
+- **Hybrid Configuration Model:** The service will adopt a hierarchical configuration model (supporting Flags -> Environment Variables -> YAML Config File). This ensures ease of use for containerized environments while providing structured management for "Bare Metal" deployments.
 - Maintain strict statelessness (Factor VI); all identity and tracing state is request-bound.
 
 ## Consequences
