@@ -2,7 +2,9 @@ package forgejo
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -11,6 +13,24 @@ import (
 
 	"codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3"
 )
+
+func mtlsClient() *http.Client {
+	if flag.TLSCert == "" || flag.TLSKey == "" {
+		return nil
+	}
+	cert, err := tls.LoadX509KeyPair(flag.TLSCert, flag.TLSKey)
+	if err != nil {
+		log.Error("Failed to load mTLS certificate", log.ErrorField(err))
+		return nil
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+		},
+	}
+}
 
 var (
 	client     *forgejo.Client
@@ -40,10 +60,14 @@ func Client(ctx context.Context) (*forgejo.Client, error) {
 			userAgent = "forgejo-mcp/" + flag.Version
 		}
 
-		c, err := forgejo.NewClient(flag.URL,
+		opts := []forgejo.ClientOption{
 			forgejo.SetToken(token),
 			forgejo.SetUserAgent(userAgent),
-		)
+		}
+		if hc := mtlsClient(); hc != nil {
+			opts = append(opts, forgejo.SetHTTPClient(hc))
+		}
+		c, err := forgejo.NewClient(flag.URL, opts...)
 		if err != nil {
 			log.ErrorCtx(ctx, "Failed to create ephemeral Forgejo client",
 				log.SanitizedURLField("url", flag.URL),
@@ -62,10 +86,14 @@ func Client(ctx context.Context) (*forgejo.Client, error) {
 				userAgent = "forgejo-mcp/" + flag.Version
 			}
 
-			c, err := forgejo.NewClient(flag.URL,
+			singletonOpts := []forgejo.ClientOption{
 				forgejo.SetToken(flag.Token),
 				forgejo.SetUserAgent(userAgent),
-			)
+			}
+			if hc := mtlsClient(); hc != nil {
+				singletonOpts = append(singletonOpts, forgejo.SetHTTPClient(hc))
+			}
+			c, err := forgejo.NewClient(flag.URL, singletonOpts...)
 			if err != nil {
 				log.Error("Failed to create Forgejo client",
 					log.SanitizedURLField("url", flag.URL),

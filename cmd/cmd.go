@@ -19,6 +19,8 @@ var (
 	httpPort  int
 	token     string
 	userAgent string
+	tlsCert   string
+	tlsKey    string
 
 	debug bool
 )
@@ -93,6 +95,18 @@ func initFlags() {
 		true,
 		"debug mode",
 	)
+	fs.StringVar(
+		&tlsCert,
+		"tls-cert",
+		"",
+		"Path to TLS client certificate (PEM) for mTLS",
+	)
+	fs.StringVar(
+		&tlsKey,
+		"tls-key",
+		"",
+		"Path to TLS client key (PEM) for mTLS",
+	)
 
 	fs.Parse(os.Args[1:])
 
@@ -165,6 +179,15 @@ func initConfig() {
 		if flagPkg.UserAgent != "" {
 			log.Debug("Using FORGEJO_USER_AGENT environment variable")
 		}
+	}
+
+	flagPkg.TLSCert = tlsCert
+	if flagPkg.TLSCert == "" {
+		flagPkg.TLSCert = os.Getenv("FORGEJO_TLS_CERT")
+	}
+	flagPkg.TLSKey = tlsKey
+	if flagPkg.TLSKey == "" {
+		flagPkg.TLSKey = os.Getenv("FORGEJO_TLS_KEY")
 	}
 
 	if debug {

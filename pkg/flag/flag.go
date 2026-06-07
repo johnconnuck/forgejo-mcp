@@ -9,4 +9,7 @@ var (
 	UserAgent string
 
 	Debug bool
+
+	TLSCert string
+	TLSKey  string
 )
