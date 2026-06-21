@@ -40,6 +40,27 @@ Environment variables: `FORGEJO_URL`, `FORGEJO_ACCESS_TOKEN`, `FORGEJO_DEBUG`, `
 
 CLI options: `--url`, `--token`, `--transport`, `--sse-port`, `--user-agent`
 
+### Wiring this server into your AI assistant for development
+
+`.mcp.json` is machine-specific and **git-ignored** — each developer keeps their
+own. Copy the template and customize it:
+
+```bash
+cp .mcp.json.example .mcp.json
+export CODEBERG_TOKEN=<your token>   # consumed via FORGEJO_ACCESS_TOKEN
+```
+
+The template defines two servers:
+
+- **`codeberg`** — runs the installed `forgejo-mcp` from your `PATH` (e.g. after
+  `go install`). Use this for a stable build.
+- **`codeberg-devel`** — runs your locally built binary. Defaults to
+  `./forgejo-mcp` (after `make build`); set `FORGEJO_MCP_BIN` to an absolute path
+  to use one build from any directory (handy across git worktrees).
+
+The token is passed via the `FORGEJO_ACCESS_TOKEN` environment variable rather
+than a `--token` argument so it never appears in process listings.
+
 ## Architecture
 
 This is an MCP (Model Context Protocol) server that exposes Forgejo API operations as tools for AI assistants.

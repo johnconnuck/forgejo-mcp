@@ -1,0 +1,16 @@
+{
+    "mcpServers": {
+        "codeberg": {
+            "type": "stdio",
+            "command": "forgejo-mcp",
+            "args": ["-transport", "stdio", "-url", "https://codeberg.org"],
+            "env": { "FORGEJO_ACCESS_TOKEN": "${CODEBERG_TOKEN}" }
+        },
+        "codeberg-devel": {
+            "type": "stdio",
+            "command": "${FORGEJO_MCP_BIN:-./forgejo-mcp}",
+            "args": ["-transport", "stdio", "-url", "https://codeberg.org"],
+            "env": { "FORGEJO_ACCESS_TOKEN": "${CODEBERG_TOKEN}" }
+        }
+    }
+}
