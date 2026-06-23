@@ -154,6 +154,48 @@ func TestUpdateFileFn_Base64EncodesContent(t *testing.T) {
 	}
 }
 
+func TestUpdateFileFn_SkipsContent(t *testing.T) {
+	srv := setupFileResponseMockServer(t)
+	defer srv.Close()
+
+	plainText := "binary-like content"
+
+	req := newCallToolRequest(map[string]interface{}{
+		"owner":        "testowner",
+		"repo":         "testrepo",
+		"filePath":     "README.md",
+		"content":      plainText,
+		"message":      "update test file",
+		"branch_name":  "main",
+		"sha":          "abc123",
+		"skip_content": true,
+	})
+
+	result, err := UpdateFileFn(context.Background(), req)
+	if err != nil {
+		t.Fatalf("UpdateFileFn returned error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("UpdateFileFn (skip_content=true) returned tool error")
+	}
+
+	text := result.Content[0].(mcp.TextContent).Text
+	var wrapper map[string]interface{}
+	if err := json.Unmarshal([]byte(text), &wrapper); err != nil {
+		t.Errorf("skip_content=true response is not valid JSON: %v\n  got: %q", err, text)
+	}
+	if _, ok := wrapper["Result"]; !ok {
+		t.Errorf("skip_content=true response missing 'Result' key\n  got: %q", text)
+	}
+
+	content := wrapper["Result"].(map[string]interface{})["content"].(map[string]interface{})
+
+	if content["content"] != nil || content["encoding"] != nil {
+		t.Errorf("skip_content=true response contains non-nil 'content' or 'encoding'\n  got: %q", text)
+	}
+
+}
+
 // setupContentsResponseMockServer creates an httptest server that returns a
 // proper Forgejo ContentsResponse (for the GetContents/with_metadata path).
 func setupContentsResponseMockServer(t *testing.T) *httptest.Server {
@@ -164,6 +206,27 @@ func setupContentsResponseMockServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"type":"file","name":"README.md","path":"README.md","sha":"abc123","content":"%s","encoding":"base64"}`, encodedContent)
+	}))
+
+	client, err := forgejo_sdk.NewClient(srv.URL, forgejo_sdk.SetForgejoVersion("7.0.0"))
+	if err != nil {
+		t.Fatalf("creating test client: %v", err)
+	}
+	forgejo.SetClientForTesting(client)
+
+	return srv
+}
+
+// setupFileResponseMockServer creates an httptest server that returns a
+// proper Forgejo FileResponse (for the UpdateFileFn/skip_content path).
+func setupFileResponseMockServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	encodedContent := base64.StdEncoding.EncodeToString([]byte("binary-like content"))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"content": {"type":"file","name":"README.md","path":"README.md","sha":"abc123","content":"%s","encoding":"base64"}}`, encodedContent)
 	}))
 
 	client, err := forgejo_sdk.NewClient(srv.URL, forgejo_sdk.SetForgejoVersion("7.0.0"))

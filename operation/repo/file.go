@@ -58,6 +58,7 @@ var (
 		mcp.WithString("branch_name", mcp.Required(), mcp.Description(params.BranchName)),
 		mcp.WithString("sha", mcp.Required(), mcp.Description(params.SHA)),
 		mcp.WithString("new_branch_name", mcp.Description(params.NewBranchName)),
+		mcp.WithBoolean("skip_content", mcp.Description("Do not return the updated file's contents")),
 	)
 
 	DeleteFileTool = mcp.NewTool(
@@ -191,6 +192,7 @@ func UpdateFileFn(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	message, _ := req.GetArguments()["message"].(string)
 	branchName, _ := req.GetArguments()["branch_name"].(string)
 	sha, _ := req.GetArguments()["sha"].(string)
+	skipContent, _ := req.GetArguments()["skip_content"].(bool)
 	newBranchName, ok := req.GetArguments()["new_branch_name"].(string)
 	if !ok || newBranchName == "" {
 		newBranchName = ""
@@ -211,6 +213,10 @@ func UpdateFileFn(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolRe
 	fileResp, _, err := client.UpdateFile(owner, repo, filePath, opt)
 	if err != nil {
 		return to.ErrorResult(fmt.Errorf("update file error: %w", err))
+	}
+	if skipContent {
+		fileResp.Content.Content = nil
+		fileResp.Content.Encoding = nil
 	}
 	return to.TextResult(fileResp)
 }
