@@ -19,8 +19,9 @@ var (
 	httpPort  int
 	token     string
 	userAgent string
-	tlsCert   string
-	tlsKey    string
+	tlsCert string
+	tlsKey  string
+	tlsCA   string
 
 	debug bool
 )
@@ -107,6 +108,12 @@ func initFlags() {
 		"",
 		"Path to TLS client key (PEM) for mTLS",
 	)
+	fs.StringVar(
+		&tlsCA,
+		"tls-ca",
+		"",
+		"Path to custom CA certificate (PEM) to trust for server verification",
+	)
 
 	fs.Parse(os.Args[1:])
 
@@ -188,6 +195,10 @@ func initConfig() {
 	flagPkg.TLSKey = tlsKey
 	if flagPkg.TLSKey == "" {
 		flagPkg.TLSKey = os.Getenv("FORGEJO_TLS_KEY")
+	}
+	flagPkg.TLSCA = tlsCA
+	if flagPkg.TLSCA == "" {
+		flagPkg.TLSCA = os.Getenv("FORGEJO_TLS_CA")
 	}
 
 	if debug {

@@ -12,4 +12,5 @@ var (
 
 	TLSCert string
 	TLSKey  string
+	TLSCA   string
 )

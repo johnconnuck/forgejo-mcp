@@ -3,8 +3,10 @@ package forgejo
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -17,20 +19,39 @@ import (
 func mtlsClient() *http.Client {
 	hasCert := flag.TLSCert != ""
 	hasKey := flag.TLSKey != ""
-	if !hasCert && !hasKey {
+	hasCA := flag.TLSCA != ""
+
+	if !hasCert && !hasKey && !hasCA {
 		return nil
 	}
 	if hasCert != hasKey {
 		log.Fatalf("mTLS configuration error: both -tls-cert and -tls-key must be set together (got only one)")
 	}
-	cert, err := tls.LoadX509KeyPair(flag.TLSCert, flag.TLSKey)
-	if err != nil {
-		log.Fatalf("mTLS configuration error: failed to load certificate pair: %v", err)
+
+	tlsCfg := &tls.Config{}
+
+	if hasCert {
+		cert, err := tls.LoadX509KeyPair(flag.TLSCert, flag.TLSKey)
+		if err != nil {
+			log.Fatalf("mTLS configuration error: failed to load certificate pair: %v", err)
+		}
+		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
+
+	if hasCA {
+		pem, err := os.ReadFile(flag.TLSCA)
+		if err != nil {
+			log.Fatalf("mTLS configuration error: failed to read CA certificate: %v", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			log.Fatalf("mTLS configuration error: no valid certificates found in CA file: %s", flag.TLSCA)
+		}
+		tlsCfg.RootCAs = pool
+	}
+
 	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.TLSClientConfig = &tls.Config{
-		Certificates: []tls.Certificate{cert},
-	}
+	t.TLSClientConfig = tlsCfg
 	return &http.Client{
 		Transport: t,
 		Timeout:   30 * time.Second,
