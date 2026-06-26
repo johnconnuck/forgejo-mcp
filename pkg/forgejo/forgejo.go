@@ -15,20 +15,25 @@ import (
 )
 
 func mtlsClient() *http.Client {
-	if flag.TLSCert == "" || flag.TLSKey == "" {
+	hasCert := flag.TLSCert != ""
+	hasKey := flag.TLSKey != ""
+	if !hasCert && !hasKey {
 		return nil
+	}
+	if hasCert != hasKey {
+		log.Fatalf("mTLS configuration error: both -tls-cert and -tls-key must be set together (got only one)")
 	}
 	cert, err := tls.LoadX509KeyPair(flag.TLSCert, flag.TLSKey)
 	if err != nil {
-		log.Error("Failed to load mTLS certificate", log.ErrorField(err))
-		return nil
+		log.Fatalf("mTLS configuration error: failed to load certificate pair: %v", err)
+	}
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.TLSClientConfig = &tls.Config{
+		Certificates: []tls.Certificate{cert},
 	}
 	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			},
-		},
+		Transport: t,
+		Timeout:   30 * time.Second,
 	}
 }
 
