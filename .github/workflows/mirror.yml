@@ -112,8 +112,9 @@ jobs:
               continue
             fi
             echo "release $tag: syncing $(printf '%s\n' "$missing" | grep -c .) asset(s)"
+            # no --target: the API resolves the commit from the tag itself
             gh release view "$tag" >/dev/null 2>&1 || \
-              gh release create "$tag" --title "$tag" --target "$tag" \
+              gh release create "$tag" --title "$tag" \
                 --notes "Mirror of upstream release $tag, synced from https://git.b4mad.industries/agentic-forges/forgejo-mcp"
             tmp=$(mktemp -d)
             files=()
