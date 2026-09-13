@@ -38,7 +38,7 @@ jobs:
           git config user.name "mirror-bot"
           git config user.email "25236236+johnconnuck@users.noreply.github.com"
           for attempt in 1 2 3; do
-            if git fetch --force upstream 'refs/heads/*:refs/remotes/upstream/*' 'refs/tags/*:refs/tags/*'; then
+            if git fetch --force upstream 'refs/heads/*:refs/remotes/upstream/heads/*' 'refs/tags/*:refs/tags/*'; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then exit 1; fi
