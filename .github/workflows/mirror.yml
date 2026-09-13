@@ -87,15 +87,18 @@ jobs:
             done
           }
 
-          # page through the Forgejo releases API (100/page)
+          # page through the Forgejo releases API (100/page); keep only
+          # wanted assets, deduped by name (older releases carry duplicate
+          # asset rows re-uploaded under the same name)
           : > /tmp/releases.jsonl
           for page in 1 2 3 4 5; do
             raw=$(retry3 curl -fsS "$API/releases?limit=100&page=$page")
             len=$(jq 'length' <<<"$raw")
             [ "$len" -eq 0 ] && break
-            jq -c --arg w "$WANT" '.[] | {tag: .tag_name, assets: [.assets[]
+            jq -c --arg w "$WANT" '.[] | {tag: .tag_name, assets: ([.assets[]
                  | select(.name | test($w))
-                 | {name, url: .browser_download_url}]}
+                 | {name, url: .browser_download_url}]
+                 | unique_by(.name))}
                | select(.assets | length > 0)' <<<"$raw" \
               >> /tmp/releases.jsonl
             [ "$len" -lt 100 ] && break
