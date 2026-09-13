@@ -3,6 +3,16 @@ name: mirror
 # Pull-based push mirror: periodically syncs refs from the upstream
 # Forgejo repo (https://git.b4mad.industries/agentic-forges/forgejo-mcp)
 # into this GitHub repo so flake inputs can fetch from GitHub's CDN.
+#
+# Sync semantics:
+#   - Default branch: upstream's default branch is MERGED in (not
+#     force-pushed) so this repo's mirror.yml commit survives every sync
+#     while upstream commits land in its history.
+#   - All other branches and all tags: explicit force push. We do NOT use
+#     `git push --mirror` from a checkout: GitHub rejects pushes to
+#     refs/pull/*, and a partially-successful mirror push prunes every
+#     remote branch missing locally (observed on run 34752308170).
+#   - Branches deleted upstream are intentionally NOT pruned here.
 
 on:
   schedule:
@@ -25,6 +35,8 @@ jobs:
         run: |
           git remote add upstream https://git.b4mad.industries/agentic-forges/forgejo-mcp.git || \
             git remote set-url upstream https://git.b4mad.industries/agentic-forges/forgejo-mcp.git
+          git config user.name "mirror-bot"
+          git config user.email "25236236+johnconnuck@users.noreply.github.com"
           for attempt in 1 2 3; do
             if git fetch --force upstream 'refs/heads/*:refs/remotes/upstream/*' 'refs/tags/*:refs/tags/*'; then
               break
@@ -33,14 +45,20 @@ jobs:
             sleep 10
           done
 
+      - name: Sync default branch
+        run: |
+          default=$(git rev-parse --abbrev-ref HEAD)
+          git merge --no-edit "refs/remotes/upstream/heads/$default"
+          git push origin "HEAD:refs/heads/$default"
+
       - name: Push branches and tags
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Mirror-style push first; GitHub rejects refs/pull/* so fall back
-          # to explicit branches+tags force push if the mirror push fails.
-          if ! git push --mirror origin; then
-            git push --force origin \
-              'refs/remotes/upstream/heads/*:refs/heads/*' \
-              'refs/tags/*:refs/tags/*'
-          fi
+          default=$(git rev-parse --abbrev-ref HEAD)
+          args=()
+          while read -r ref; do
+            b=${ref#refs/remotes/upstream/heads/}
+            [ "$b" = "$default" ] && continue
+            args+=("$ref:refs/heads/$b")
+          done < <(git for-each-ref --format '%(refname)' refs/remotes/upstream/heads)
+          args+=('refs/tags/*:refs/tags/*')
+          git push --force origin "${args[@]}"
