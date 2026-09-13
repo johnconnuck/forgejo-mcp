@@ -1,0 +1,46 @@
+name: mirror
+
+# Pull-based push mirror: periodically syncs refs from the upstream
+# Forgejo repo (https://git.b4mad.industries/agentic-forges/forgejo-mcp)
+# into this GitHub repo so flake inputs can fetch from GitHub's CDN.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://git.b4mad.industries/agentic-forges/forgejo-mcp.git || \
+            git remote set-url upstream https://git.b4mad.industries/agentic-forges/forgejo-mcp.git
+          for attempt in 1 2 3; do
+            if git fetch --force upstream 'refs/heads/*:refs/remotes/upstream/*' 'refs/tags/*:refs/tags/*'; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then exit 1; fi
+            sleep 10
+          done
+
+      - name: Push branches and tags
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Mirror-style push first; GitHub rejects refs/pull/* so fall back
+          # to explicit branches+tags force push if the mirror push fails.
+          if ! git push --mirror origin; then
+            git push --force origin \
+              'refs/remotes/upstream/heads/*:refs/heads/*' \
+              'refs/tags/*:refs/tags/*'
+          fi
