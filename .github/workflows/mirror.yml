@@ -70,6 +70,8 @@ jobs:
           git push --force origin "${args[@]}"
 
       - name: Sync release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           API="https://git.b4mad.industries/api/v1/repos/agentic-forges/forgejo-mcp"
@@ -84,6 +86,8 @@ jobs:
               sleep 10
             done
           }
+
+          # page through the Forgejo releases API (100/page)
           : > /tmp/releases.jsonl
           for page in 1 2 3 4 5; do
             raw=$(retry3 curl -fsS "$API/releases?limit=100&page=$page")
