@@ -8,8 +8,8 @@ name: mirror
 #   - Default branch: upstream's default branch is MERGED in (not
 #     force-pushed) so this repo's mirror.yml commit survives every sync
 #     while upstream commits land in its history.
-#   - All other branches and all tags: explicit force push. We do NOT use
-#     `git push --mirror` from a checkout: GitHub rejects pushes to
+#   - All other branches, tags, and notes: explicit force push. We do NOT
+#     use `git push --mirror` from a checkout: GitHub rejects pushes to
 #     refs/pull/*, and a partially-successful mirror push prunes every
 #     remote branch missing locally (observed on run 34752308170).
 #   - Branches deleted upstream are intentionally NOT pruned here.
@@ -38,7 +38,10 @@ jobs:
           git config user.name "mirror-bot"
           git config user.email "25236236+johnconnuck@users.noreply.github.com"
           for attempt in 1 2 3; do
-            if git fetch --force upstream 'refs/heads/*:refs/remotes/upstream/heads/*' 'refs/tags/*:refs/tags/*'; then
+            if git fetch --force upstream \
+                'refs/heads/*:refs/remotes/upstream/heads/*' \
+                'refs/tags/*:refs/tags/*' \
+                'refs/notes/*:refs/notes/*'; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then exit 1; fi
@@ -51,7 +54,7 @@ jobs:
           git merge --no-edit "refs/remotes/upstream/heads/$default"
           git push origin "HEAD:refs/heads/$default"
 
-      - name: Push branches and tags
+      - name: Push branches, tags, and notes
         run: |
           default=$(git rev-parse --abbrev-ref HEAD)
           args=()
@@ -60,5 +63,5 @@ jobs:
             [ "$b" = "$default" ] && continue
             args+=("$ref:refs/heads/$b")
           done < <(git for-each-ref --format '%(refname)' refs/remotes/upstream/heads)
-          args+=('refs/tags/*:refs/tags/*')
+          args+=('refs/tags/*:refs/tags/*' 'refs/notes/*:refs/notes/*')
           git push --force origin "${args[@]}"
