@@ -13,6 +13,9 @@ name: mirror
 #     refs/pull/*, and a partially-successful mirror push prunes every
 #     remote branch missing locally (observed on run 34752308170).
 #   - Branches deleted upstream are intentionally NOT pruned here.
+#   - Release binaries: upstream release assets (tarballs + checksums,
+#     no .mcpb/.sbom/.sig sidecars) are downloaded from the Forgejo API
+#     and uploaded to matching GitHub releases. Idempotent.
 
 on:
   schedule:
@@ -65,3 +68,57 @@ jobs:
           done < <(git for-each-ref --format '%(refname)' refs/remotes/upstream/heads)
           args+=('refs/tags/*:refs/tags/*' 'refs/notes/*:refs/notes/*')
           git push --force origin "${args[@]}"
+
+      - name: Sync release assets
+        run: |
+          set -euo pipefail
+          API="https://git.b4mad.industries/api/v1/repos/agentic-forges/forgejo-mcp"
+          # tarballs + checksums only; skip .mcpb, .sbom, .sig sidecars
+          WANT='^forgejo-mcp_[0-9][0-9.]*_(linux|darwin)_(amd64|arm64)\.tar\.gz$|^forgejo-mcp_[0-9][0-9.]*_checksums\.txt$'
+
+          retry3() {
+            local n=0
+            until "$@"; do
+              n=$((n + 1))
+              [ "$n" -ge 3 ] && return 1
+              sleep 10
+            done
+          }
+          : > /tmp/releases.jsonl
+          for page in 1 2 3 4 5; do
+            raw=$(retry3 curl -fsS "$API/releases?limit=100&page=$page")
+            len=$(jq 'length' <<<"$raw")
+            [ "$len" -eq 0 ] && break
+            jq -c --arg w "$WANT" '.[] | {tag: .tag_name, assets: [.assets[]
+                 | select(.name | test($w))
+                 | {name, url: .browser_download_url}]}
+               | select(.assets | length > 0)' <<<"$raw" \
+              >> /tmp/releases.jsonl
+            [ "$len" -lt 100 ] && break
+          done
+
+          while read -r rel; do
+            tag=$(jq -r '.tag' <<<"$rel")
+            want=$(jq -r '.assets[].name' <<<"$rel" | LC_ALL=C sort)
+            have=$(gh release view "$tag" --json assets \
+                     -q '.assets[].name' 2>/dev/null | LC_ALL=C sort || true)
+            missing=$(LC_ALL=C comm -23 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))
+            if [ -z "$missing" ]; then
+              echo "release $tag: assets up to date"
+              continue
+            fi
+            echo "release $tag: syncing $(printf '%s\n' "$missing" | grep -c .) asset(s)"
+            gh release view "$tag" >/dev/null 2>&1 || \
+              gh release create "$tag" --title "$tag" --target "$tag" \
+                --notes "Mirror of upstream release $tag, synced from https://git.b4mad.industries/agentic-forges/forgejo-mcp"
+            tmp=$(mktemp -d)
+            files=()
+            while read -r name; do
+              [ -z "$name" ] && continue
+              url=$(jq -r --arg n "$name" '.assets[] | select(.name == $n) | .url' <<<"$rel")
+              retry3 curl -fsSL "$url" -o "$tmp/$name"
+              files+=("$tmp/$name")
+            done <<<"$missing"
+            gh release upload "$tag" "${files[@]}" --clobber
+            rm -rf "$tmp"
+          done < /tmp/releases.jsonl
