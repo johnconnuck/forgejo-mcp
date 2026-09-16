@@ -295,6 +295,7 @@ List all my repositories
 | `delete_file` | Delete a file |
 | **Commits** | |
 | `list_repo_commits` | List commits in a repository |
+| `get_commit_statuses` | List per-context commit statuses for a full 40-character SHA. Bounded by `page` (default 1) + `limit` (default 30, maximum 50); returns `{sha, statuses, page, limit, count, total_count}` — `total_count` is present only when Forgejo reports `X-Total-Count`. Combined aggregate stays on the commit status resource. Not Actions runs (`list_workflow_runs`). |
 | **Issues** | |
 | `list_repo_issues` | List issues in a repository (page/limit). Optional `sort` orders server-side: `relevance`, `latest`, `oldest`, `recentupdate`, `leastupdate`, `mostcomment`, `leastcomment`, `nearduedate`, `farduedate` (the last two are the due-date directions). |
 | `search_issues` | Search issues across every repository of one owner (page/limit); returns `{issues,page,limit,count,has_next,total_count}` — `total_count` is present only when Forgejo reports `X-Total-Count` |
@@ -306,8 +307,8 @@ List all my repositories
 | `issue_state_change` | Open or close an issue |
 | `list_issue_dependencies` | List issues the given issue depends on. Bounded by `page` (1-based) + `limit` (page size); the response echoes `page`/`limit` so callers can fetch the next page. |
 | `list_issue_dependents` | List issues that depend on the given issue. Bounded by `page` (1-based) + `limit` (page size); the response echoes `page`/`limit` so callers can fetch the next page. |
-| `add_issue_dependency` | Make one issue depend on another |
-| `remove_issue_dependency` | Remove a dependency from an issue |
+| `add_issue_dependency` | Make one issue depend on another. The dependency may live in a different repository: optional `depends_on_owner`/`depends_on_repo` default to `owner`/`repo`. |
+| `remove_issue_dependency` | Remove a dependency from an issue. For a cross-repo dependency, optional `dependency_owner`/`dependency_repo` default to `owner`/`repo`. |
 | `list_repo_milestones` | List milestones with their IDs (use with `update_issue`) |
 | `list_repo_labels` | List labels with their IDs. Merges org-level labels for org-owned repos (set `include_org_labels=false` to opt out). Each entry carries a `scope` field (`"repo"` or `"org"`). |
 | `list_org_labels` | List organization-level labels with their IDs. The assignment tools accept label names directly, so this is for discovery and for the rare name that exists in both the repo and the org scope. |
@@ -337,6 +338,11 @@ List all my repositories
 | `get_pull_request_diff` | Get the unified diff of a pull request. Optional `file_path` returns only that file's hunks (matches on either pre- or post-rename path). |
 | `merge_pull_request` | Merge a pull request (style: merge/rebase/rebase-merge/squash; optional title/message/delete-branch/force-merge/wait-for-checks). |
 | `create_pull_review` | Create a review on a pull request (state: APPROVED/REQUEST_CHANGES/COMMENT) with optional inline comments. |
+| **Packages** | |
+| `list_packages` | List package versions of a user or org (one row per version). Optional `type` and `q`. Server-paged via `page`/`limit` (default 30, max 50). Envelope `{packages, page, limit, count, has_next, total_count?}`. A missing owner is an error, not an empty list |
+| `get_package` | Get one package version. Does not embed owner/creator users |
+| `delete_package` | Delete one package version (not every version of the name). No preflight. 4xx/5xx stay errors |
+| `list_package_files` | List files of one package version. Client-paged via `page`/`limit` (default 30, max 50); envelope `{files, page, limit, count, has_next, total_count}` (`total_count` is the fetched list length) |
 | **Actions** | |
 | `dispatch_workflow` | Trigger a workflow run via `workflow_dispatch` event |
 | `list_workflow_runs` | List workflow runs with optional filtering by status, event, or SHA |
@@ -493,6 +499,19 @@ forgejo-mcp --cli list_action_run_artifacts \
 forgejo-mcp --cli get_action_artifact \
   --args '{"owner":"goern","repo":"forgejo-mcp","artifact_id":789}' \
   --output=text
+
+# List package versions for an owner, then inspect one version's files
+forgejo-mcp --cli list_packages \
+  --args '{"owner":"OWNER","type":"container","limit":30}' \
+  --output=text
+forgejo-mcp --cli get_package \
+  --args '{"owner":"OWNER","type":"container","name":"app","version":"1.0.0"}' \
+  --output=text
+forgejo-mcp --cli list_package_files \
+  --args '{"owner":"OWNER","type":"container","name":"app","version":"1.0.0"}' \
+  --output=text
+
+# delete_package removes one version. Do not invoke it against a registry you do not own.
 
 # cancel_workflow_run is 204 even when the run already finished.
 # delete_workflow_run only succeeds for a completed run; a live run is an error.

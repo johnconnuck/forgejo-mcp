@@ -202,6 +202,10 @@
       "description": "Delete an organization-level label. By default refuses if the label is in use; set delete_mode=force to override. Note: in-use count is best-effort over repos visible to the token and may under-count."
     },
     {
+      "name": "delete_package",
+      "description": "Delete one package version. Removes that version only, not every version of the name."
+    },
+    {
       "name": "delete_pull_review",
       "description": "Delete a pending pull request review"
     },
@@ -322,6 +326,10 @@
       "description": "Get metadata for a single comment attachment."
     },
     {
+      "name": "get_commit_statuses",
+      "description": "List per-context commit statuses for a full 40-character SHA. Bounded by page (default 1) and limit (default 30, maximum 50). Combined aggregate stays on the commit status resource. Not Actions runs."
+    },
+    {
       "name": "get_file_content",
       "description": "Get file content as plain text by default. Set `with_metadata=true` for binary files, or when you need the SHA/encoding/"
     },
@@ -360,6 +368,10 @@
     {
       "name": "get_org_label",
       "description": "Get a single organization-level label by ID."
+    },
+    {
+      "name": "get_package",
+      "description": "Get one package version. Does not embed owner or creator users."
     },
     {
       "name": "get_pull_request_by_index",
@@ -468,6 +480,14 @@
     {
       "name": "list_org_teams",
       "description": "List teams in an organization"
+    },
+    {
+      "name": "list_package_files",
+      "description": "List files of one package version. Client-paged; total_count is the fetched length."
+    },
+    {
+      "name": "list_packages",
+      "description": "List package versions for a user or org (one row per version)."
     },
     {
       "name": "list_pull_request_files",
