@@ -6,6 +6,7 @@ require (
 	codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3 v3.0.0
 	github.com/lestrrat-go/jwx/v3 v3.3.0
 	github.com/mark3labs/mcp-go v1.2.1
+	github.com/mark3labs/mcp-go/v2 v2.0.0
 	go.uber.org/zap v1.28.0
 )
 
