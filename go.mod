@@ -1,10 +1,11 @@
 module git.b4mad.industries/agentic-forges/forgejo-mcp/v3
 
-go 1.26.0
+go 1.26.10
 
 require (
 	codeberg.org/mvdkleijn/forgejo-sdk/forgejo/v3 v3.0.0
 	github.com/lestrrat-go/jwx/v3 v3.4.0
+	github.com/lestrrat-go/jwx/v4 v4.6.0
 	github.com/mark3labs/mcp-go v1.5.0
 	go.uber.org/zap v1.28.0
 )
