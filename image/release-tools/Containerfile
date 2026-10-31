@@ -5,7 +5,7 @@
 # version signal to automerge on, per .renovaterc's release-tools/base-image-bump rule.
 
 ARG HI_GO_TAG=1.26.10-builder
-ARG HI_GO_DIGEST=sha256:3b4ef404a1aa7dc3a5b7034eea9ef028f84c9f7bb5413efae4d8c9a79dde31f7
+ARG HI_GO_DIGEST=sha256:67b65bbb377e8602b248d3c83fb4a4b1ba14216b461af444da70fdcc3e47b5b2
 ARG SYFT_VERSION=v1.44.0
 ARG SYFT_SHA256=0e91737aee2b5baf1d255b959630194a302335d848ff97bb07921eb6205b5f5a
 ARG GORELEASER_VERSION=v2.16.0
