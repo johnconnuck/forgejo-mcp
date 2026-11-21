@@ -384,6 +384,10 @@ List all my repositories
 | `add_issue_dependency` | Make one issue depend on another. The dependency may live in a different repository: optional `depends_on_owner`/`depends_on_repo` default to `owner`/`repo`. |
 | `remove_issue_dependency` | Remove a dependency from an issue. For a cross-repo dependency, optional `dependency_owner`/`dependency_repo` default to `owner`/`repo`. |
 | `list_repo_milestones` | List milestones with their IDs (use with `update_issue`) |
+| `create_milestone` | Create a milestone (`title`, optional `description`, `state` (default `open`), `due_on` RFC3339). Returns numeric `id` for immediate use in `update_issue`. |
+| `get_milestone` | Get a single milestone by ID. |
+| `edit_milestone` | Edit a milestone (PATCH — only supplied fields change: `title`, `description`, `state`, `due_on`). The Forgejo API can replace a deadline but not clear it. |
+| `delete_milestone` | Delete a milestone by ID. Refuses by default when issues are assigned (reports count); set `delete_mode=force` to delete anyway — the issues lose the milestone. |
 | `list_repo_labels` | List labels with their IDs. Merges org-level labels for org-owned repos (set `include_org_labels=false` to opt out). Each entry carries a `scope` field (`"repo"` or `"org"`), plus `exclusive` and `is_archived` (`false` is present, not omitted). |
 | `list_org_labels` | List organization-level labels with their IDs. The assignment tools accept label names directly, so this is for discovery and for the rare name that exists in both the repo and the org scope. Each entry includes `exclusive` and `is_archived`. |
 | `create_repo_label` | Create a repository label (`name`, `color` as 6-digit hex, optional `description`, `exclusive`, `is_archived`). `exclusive=true` requires a scoped name (a `/` not at either end). Returns the numeric `id`; `add_issue_labels` also takes the name. |
@@ -432,6 +436,11 @@ List all my repositories
 | `delete_workflow_run` | Delete a completed Forgejo v16+ workflow run. A live run is an API error. Removes the run and its job logs; Forgejo marks that run's artifacts deleted |
 | `list_action_run_artifacts` | List artifacts of a Forgejo v16+ workflow run. Server-paged via `page`/`limit` (default 30, max 50); optional `name` filter. Envelope `{artifacts, page, limit, count, total_count?}` |
 | `get_action_artifact` | Get metadata for one Forgejo v16+ Actions artifact. Does not download the zip |
+| `list_action_variables` | List action variables for `scope` `user`, `org`, or `repo`. Rows are `name`, `owner_id`, `repo_id` (no value). `page` default 1, `limit` default 30 max 50. Envelope `{variables, scope, page, limit, count, total_count?}`. Forgejo has no REST API for instance-global action variables. A job can still see one. This tool does not return it |
+| `get_action_variable` | Get one action variable, including `data`. A missing name is an error. Same scope rules. No instance-global REST API |
+| `create_action_variable` | Create an action variable (Forgejo POST). `data` is sent as JSON `value` and is not echoed. A `/`, `?`, or `#` in `name` is rejected before any request |
+| `update_action_variable` | Update an action variable (Forgejo PUT). `data` is not echoed. A missing name is an error |
+| `delete_action_variable` | Delete an action variable. A missing name is an error |
 | `list_repo_action_secrets` | List a repository's Actions secrets (names only; Forgejo never returns values). Client-paged via `page`/`limit` (default 30, max 50) |
 | `create_or_update_repo_action_secret` | Create or update a repository Actions secret. Overwrites any existing secret with the same name; the value is never echoed back |
 | `delete_repo_action_secret` | Delete a repository Actions secret |
@@ -664,12 +673,48 @@ You can configure the server using command-line arguments or environment variabl
 | `--forgejo-jwt-published-key-files` | `FORGEJO_MCP_FORGEJO_JWT_PUBLISHED_KEY_FILES` | `resource-server` mode: comma-separated PEM keys published next to the signing key, for key rotation |
 | `--cli` | - | Enter CLI mode for direct tool invocation |
 | `--user-agent` | `FORGEJO_USER_AGENT` | HTTP User-Agent header (default: `forgejo-mcp/<version>`) |
+| `--tls-cert` | `FORGEJO_TLS_CERT` | PEM client certificate presented to Forgejo, for an instance behind mutual TLS; needs `--tls-key`. See [Connecting to Forgejo behind mutual TLS](#connecting-to-forgejo-behind-mutual-tls) |
+| `--tls-key` | `FORGEJO_TLS_KEY` | PEM private key of `--tls-cert` |
+| `--tls-ca` | `FORGEJO_TLS_CA` | PEM CA bundle trusted for Forgejo's server certificate. It **replaces** the system roots |
 | - | `FORGEJO_MCP_ALLOW_FILE_PATH_UPLOAD` | Allow `file_path` attachment uploads to read the host filesystem (`1`/`true`/`yes`/`on`; off by default) |
 | - | `FORGEJO_MCP_UPLOAD_ROOT` | Confine `file_path` uploads to this directory (default: anywhere the process can read) |
 
 Command-line arguments take priority over environment variables.
 
 The `resource-server` settings are refused in `passthrough` mode, so a configuration that sets them but forgets `--auth-mode resource-server` does not start.
+
+### Connecting to Forgejo behind mutual TLS
+
+If the TLS terminator in front of your Forgejo instance demands a client
+certificate, give forgejo-mcp one. If Forgejo's certificate comes from a
+private CA, give it that CA:
+
+```bash
+forgejo-mcp -t stdio -url https://git.example.com \
+  -tls-cert ~/.config/mtls/client.crt.pem \
+  -tls-key  ~/.config/mtls/client.key.pem \
+  -tls-ca   ~/.config/mtls/internal-ca.crt.pem
+```
+
+`--tls-ca` also works on its own, without a client certificate. Every connection
+to Forgejo uses these settings: tool calls with the caller's token or the
+operator token, the tools that use Forgejo's REST API directly, and the version
+check at startup. In `--cli` mode, set the `FORGEJO_TLS_*` variables.
+
+- **The CA replaces the system roots.** With `--tls-ca` set, a server
+  certificate from any other CA is refused, including public ones. If you need
+  several CAs, concatenate them into one bundle.
+- **Fail closed.** The server does not start in these cases:
+  - a certificate is given without its key, or a key without its certificate;
+  - a file cannot be read, or the certificate and key do not match;
+  - the CA file holds no certificate;
+  - the URL is `http://`;
+  - the client certificate has already expired.
+
+  It never falls back to a connection without the TLS settings you gave. There
+  is no option to skip server certificate verification.
+- **Renewal needs a restart.** The files are read once at startup. The startup
+  log records when the client certificate expires (`client_cert_not_after`).
 
 ### Uploading attachments from the host filesystem
 
